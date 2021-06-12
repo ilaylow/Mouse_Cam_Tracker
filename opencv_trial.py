@@ -4,6 +4,8 @@ import pickle
 import math
 import pyautogui as pyauto
 
+pyauto.FAILSAFE = False
+
 cap = cv2.VideoCapture(0)
 
 min_skin = pickle.load(open(r"C:\Users\chuen\Desktop\Python\max_hsv_skin.pickle", "rb"))
@@ -86,8 +88,10 @@ while True:
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(frame, 'Region Of Interest', (0, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
-    cv2.rectangle(frame, (15,90), (300, 380), (0,255,0), 5)
+    #cv2.rectangle(frame, (15,90), (300, 380), (0,255,0), 5)
     roi = frame[90:380, 15:300]
+
+    roi = cv2.resize(roi, (400, 400))
 
     # Converts Image to Grayscale
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
@@ -99,15 +103,22 @@ while True:
     blur_roi = cv2.dilate(blur_roi, None, iterations = 2)
 
     # HSv range for detecting skin (note can vary depending on person)
-    min_skin = np.array([0, 58, 30], dtype = "uint8")
-    max_skin = np.array([33, 255, 255], dtype = "uint8")
+    #min_skin = np.array([0, 58, 30], dtype = "uint8")
+    #max_skin = np.array([33, 255, 255], dtype = "uint8")
+
+    # Night values
+    min_skin = np.array([54, 28, 23], dtype = "uint8")
+    max_skin = np.array([170, 208, 192], dtype = "uint8")
 
     # Converts our image to HSV (Hue Saturation Value)
     roi_HSV = cv2.cvtColor(blur_roi, cv2.COLOR_BGR2HSV)
 
     skin_mask = cv2.inRange(roi_HSV, min_skin, max_skin) # Been reversed
+    #skin_mask = 255 - skin_mask
 
     contours, val1 = cv2.findContours(skin_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    if len(contours) == 0:
+        continue
 
     max_contour = max(contours, key = cv2.contourArea)
     return_hull = cv2.convexHull(max_contour)
@@ -115,7 +126,6 @@ while True:
 
     cx, cy = find_centroid(max_contour)
     cv2.circle(roi, (cx, cy), 5, [255, 255, 0], -1)
-
 
     dx, dy, max_dist = find_farthest(cx, cy, return_hull)
 
@@ -125,15 +135,19 @@ while True:
     if count and dy < old_dy + 2.5 and dy > old_dy - 2.5:
         dy = old_dy
 
-    cv2.circle(roi , (dx, dy) , 5, [0,0,255], -1 )
-
     print(max_dist)
-    pyauto.moveTo(dx * 6.736, dy * 5.684)
+
+    if max_dist >= 100:
+        cv2.circle(roi , (dx, dy) , 5, [0,0,255], -1 )
+        pyauto.moveTo(dx * 6.736, dy * 5.684)
+
+    #if max_dist >= 55 and max_dist <= 65:
+        #pyauto.click()
 
     old_dx = dx
     old_dy = dy
 
-    count += 1
+    count = 1
 
     """for contour in contours:
         area = cv2.contourArea(contour)
@@ -148,7 +162,7 @@ while True:
 
     cv2.imshow("frame", frame)
     cv2.imshow("roi", roi)
-
+    cv2.imshow("hsv", roi_HSV)
     cv2.imshow("skin", skin_mask)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
